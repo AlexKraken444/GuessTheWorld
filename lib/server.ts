@@ -41,7 +41,7 @@ const seeds = [
   [52.52, 13.405],
 ];
 export async function location(used: string[]) {
-  const key = process.env.GOOGLE_MAPS_SERVER_KEY;
+  const key = process.env.GOOGLE_MAPS_SERVER_KEY?.trim();
   if (!key) throw new Error("Добавьте GOOGLE_MAPS_SERVER_KEY для Street View.");
   for (let i = 0; i < 8; i++) {
     const s = seeds[Math.floor(Math.random() * seeds.length)];
@@ -66,10 +66,26 @@ export async function location(used: string[]) {
         target: data.location as { lat: number; lng: number },
         pano: data.pano_id as string,
       };
-    if (["REQUEST_DENIED", "OVER_QUERY_LIMIT"].includes(data.status))
+    if (!["OK", "ZERO_RESULTS", "UNKNOWN_ERROR"].includes(data.status)) {
+      // Never include a credential or request URL in user-visible errors.
+      const detail =
+        typeof data.error_message === "string"
+          ? data.error_message
+              .split(key)
+              .join("[скрыто]")
+              .replace(/AIza[\w-]+/g, "[скрыто]")
+              .slice(0, 600)
+          : "";
+      const hint =
+        data.status === "OVER_QUERY_LIMIT"
+          ? "Google сообщает о превышении квоты Street View Static API."
+          : data.status === "OVER_DAILY_LIMIT"
+            ? "Проверьте Billing, квоты и действительность серверного ключа."
+            : "Проверьте, что для серверного ключа включён Street View Static API и нет ограничения Websites / HTTP referrers.";
       throw new Error(
-        "Google Maps: проверьте API-ключ, включённые API и квоту.",
+        `Google Maps (${data.status || `HTTP ${response.status}`}): ${detail || hint}`,
       );
+    }
   }
   throw new Error("Не удалось найти панораму. Попробуйте ещё раз.");
 }
