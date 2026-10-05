@@ -64,7 +64,11 @@ export default function Home() {
         : undefined,
       cache: "no-store",
     });
-    const body = await res.json();
+    const body = await res.json().catch(() => {
+      throw new Error(
+        `Сервер не смог обработать запрос (HTTP ${res.status}). Повторите попытку.`,
+      );
+    });
     if (!res.ok) throw new Error(body.error);
     return body as { code: string; game: ViewGame; version: number };
   }
@@ -116,7 +120,6 @@ export default function Home() {
         const d = await request();
         if (active) {
           accept(d);
-          setError("");
         }
       } catch (e) {
         if (active) setError((e as Error).message);

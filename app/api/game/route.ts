@@ -30,7 +30,8 @@ export async function GET(req: NextRequest) {
         .select("*")
         .eq("code", code)
         .single();
-      if (error || !data) throw new Error("Комната не найдена.");
+      if (error) throw databaseError(error);
+      if (!data) throw new Error("Комната не найдена.");
       const g = data.state as Game;
       if (!g.players.some((p) => p.id === u.id))
         throw new Error("Вы не участник комнаты.");
@@ -74,7 +75,7 @@ export async function POST(req: NextRequest) {
         used: [],
       };
       const { error } = await db.from("rooms").insert({ code, state: g });
-      if (error) throw error;
+      if (error) throw databaseError(error);
       return NextResponse.json({ code, game: publicGame(g, u.id), version: 0 });
     }
     const code = codeOf(req, b);
@@ -85,7 +86,8 @@ export async function POST(req: NextRequest) {
         .select("*")
         .eq("code", code)
         .single();
-      if (error || !data) throw new Error("Комната не найдена.");
+      if (error) throw databaseError(error);
+      if (!data) throw new Error("Комната не найдена.");
       const g = data.state as Game;
       const p = g.players.find((p) => p.id === u.id);
       if (b.action === "join") {
@@ -178,5 +180,20 @@ function fail(e: unknown) {
   return NextResponse.json(
     { error: e instanceof Error ? e.message : "Ошибка сервера" },
     { status: 400 },
+  );
+}
+function databaseError(error: { code?: string; message: string }) {
+  console.error("Supabase database:", error.code, error.message);
+  if (error.code === "PGRST205" || error.code === "42P01")
+    return new Error(
+      "В Supabase не создана таблица комнат. Выполните supabase/schema.sql в SQL Editor.",
+    );
+  if (error.code === "42501")
+    return new Error(
+      "Серверу недоступна таблица комнат. Проверьте SUPABASE_SERVICE_ROLE_KEY в Vercel.",
+    );
+  if (error.code === "PGRST116") return new Error("Комната не найдена.");
+  return new Error(
+    "Не удалось сохранить или загрузить комнату. Проверьте настройки Supabase и логи сервера.",
   );
 }
